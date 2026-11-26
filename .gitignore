@@ -15,3 +15,10 @@ local.properties
 google-services.json
 keystore.properties
 signing.properties
+# Vercel and Supabase: project links, CLI state, local env and the Deals admin app
+.vercel/
+vercel.json
+.env*.local
+supabase/
+.supabase/
+offers-admin/
