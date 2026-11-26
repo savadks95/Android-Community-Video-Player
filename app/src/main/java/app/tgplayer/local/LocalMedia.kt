@@ -33,15 +33,25 @@ data class Entry(val file: File, val item: LocalItem?) {
     val isDir get() = item == null
 }
 
-/** Files on the phone: the All-files-access gate, a folder browser, and MediaStore libraries. */
+/**
+ * Files on the phone: the media-permission gate, a folder browser, and MediaStore libraries.
+ *
+ * With the media permissions the folder browser still works on file paths, but Android 11+ shows it only
+ * folders and media files (no all-files access, which Google Play allows only for file managers). Subtitle
+ * files beside a local video are then not visible; the player's "Load subtitle file…" opens them instead.
+ */
 object LocalMedia {
-    fun hasAccess(context: Context): Boolean =
-        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
-        else context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    /** What to ask for: videos and music on Android 13+, the storage permission before. */
+    val permissions: Array<String> =
+        if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
-    /** Android 11+: the system screen with the "Allow access to manage all files" switch for this app. */
-    fun allFilesAccessIntent(context: Context): Intent =
-        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}"))
+    fun hasAccess(context: Context): Boolean =
+        permissions.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    /** This app's page in system settings, for when the permission was denied for good. */
+    fun appSettingsIntent(context: Context): Intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
 
     /** Internal storage first, then SD cards / USB drives. */
     fun roots(context: Context): List<Pair<String, File>> {
@@ -70,7 +80,7 @@ object LocalMedia {
         videos(context).sortedByDescending { it.modified }
     }
 
-    @Suppress("DEPRECATION") // DATA is still filled in and readable with all-files access
+    @Suppress("DEPRECATION") // DATA is still filled in, and media files at those paths are readable with the media permissions
     private fun videos(context: Context): List<LocalItem> {
         val cols = arrayOf(MediaStore.Video.Media.DATA, MediaStore.Video.Media.DURATION, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATE_MODIFIED)
         return context.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cols, null, null, null)?.use { c ->

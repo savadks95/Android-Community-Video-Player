@@ -38,8 +38,11 @@ Each time the app starts, the TG Player mark springs in on an amber glow. The na
 
 The **Video**, **Music** and **Browse → Storage** sections need permission to read your files. Until you allow it, they show a **Your files** card with an **Allow file access** button.
 
-- **Android 11 and newer:** the button opens the system screen *Allow access to manage all files*. Turn the switch on and go back.
-- **Android 10 and older:** the usual storage permission prompt appears.
+- **Android 13 and newer:** Android asks to allow access to **Music and audio** and **Photos and videos**. Allow both.
+- **Android 12 and older:** the usual storage permission prompt appears.
+- If you denied it twice, Android stops asking; the button then opens TG Player's page in Settings → **Permissions**.
+
+TG Player reads only videos and music. It never asks to manage all files, so on Android 11 and newer the folder browser shows folders, videos and music only.
 
 The app checks again whenever you return to it. Telegram, web links, network drives and Jellyfin work without file access.
 
@@ -420,7 +423,7 @@ One player for everything: phone files, links, network drives, Telegram and Jell
 - **Remembered language:** the audio and subtitle language you choose is used for the next videos too.
 
 **Subtitles are found automatically:**
-- **Beside the video:** a subtitle file next to a video on your phone or network drive loads by itself. It needs the same name as the video, optionally with a language tag: `movie.mkv` → `movie.srt`, `movie.en.srt`.
+- **Beside the video:** a subtitle file next to a video on your phone or network drive loads by itself. It needs the same name as the video, optionally with a language tag: `movie.mkv` → `movie.srt`, `movie.en.srt`. On Android 11 and newer, Android hides subtitle files on the phone from apps that don't manage all files, so for videos on the phone use **Load subtitle file…** instead. Network drives aren't affected.
 - **Online:** when a video has no subtitles at all, TG Player can find one on **OpenSubtitles.com**, in your phone's language and then English. A message says *Subtitles found online*. Turn this off with **Find subtitles online** in More.
 
 ### More options
@@ -544,11 +547,11 @@ Being on the list doesn't guarantee a file plays: an unusual codec inside a fami
 - **Telegram:** your login and Telegram data stay in the app's private storage on the phone, and are never included in phone backups.
 - **Kept on the phone only:** watch history, favourites, watch-later lists and settings. TG Player has no account and no cloud sync. The one exception is Jellyfin, which reports your progress to **your own** server.
 - **Saved logins:** network drive passwords and the Jellyfin sign-in token are kept in the app's private storage.
-- **Install count:** the first time the app runs, it sends a random install number once, so installs can be counted. It contains nothing about you.
 - **Third-party services:**
   - **TMDb:** receives movie titles to look up details.
   - **OpenSubtitles:** receives a video's name and fingerprint when it searches for subtitles.
   - **Telegram:** handles everything in the Telegram section.
+- **Full policy:** [privacy policy](privacy-policy.md), also at More → About → **Privacy policy**.
 
 ---
 
@@ -556,7 +559,7 @@ Being on the list doesn't guarantee a file plays: an unusual codec inside a fami
 
 | Problem | Try this |
 |---|---|
-| Video, Music or Browse is empty | Allow file access: tap **Allow file access** on the *Your files* card. |
+| Video, Music or Browse is empty | Tap **Allow file access** on the *Your files* card and allow Music and audio, and Photos and videos. |
 | A new video isn't in the Video tab | Android hasn't indexed it yet. Wait a moment or restart the phone; files you download or record show up by themselves. |
 | A file has no sound | Turn on **Prefer FFmpeg audio decoder** in More, then reopen the player. |
 | Subtitles are out of sync | **Audio and subtitles → −0.25 s / +0.25 s** (subtitle files only). |

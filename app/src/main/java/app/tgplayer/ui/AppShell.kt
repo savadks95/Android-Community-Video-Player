@@ -1,7 +1,6 @@
 package app.tgplayer.ui
 
-import android.Manifest
-import android.os.Build
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -189,24 +188,31 @@ fun rememberFileAccess(): Boolean {
     return remember(resumes) { LocalMedia.hasAccess(context) }
 }
 
-/** Explains and requests file access (Android 11+: the "all files" switch; older: the storage permission). */
+/**
+ * Explains and requests the media permissions ([LocalMedia.permissions]). Once Android stops asking (denied twice),
+ * the button opens the app's settings page instead.
+ */
 @Composable
 fun AccessGate(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val legacy = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { AppEvents.resumed.value++ }
+    val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val activity = context as? Activity
+        val askedForGood = activity != null && LocalMedia.permissions.none(activity::shouldShowRequestPermissionRationale)
+        if (!LocalMedia.hasAccess(context) && askedForGood) context.startActivity(LocalMedia.appSettingsIntent(context))
+        AppEvents.resumed.value++
+    }
     Column(modifier.fillMaxWidth().padding(24.dp)) {
         Text("Your files", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(
-            "To list videos and music and browse folders like a file manager, TG Player needs access to all files. " +
-                "Android shows a switch: turn on “Allow access to manage all files”, then come back.",
+            "To list the videos and music on this phone and browse its folders, TG Player needs permission to read them. " +
+                "Nothing leaves the phone.",
             style = MaterialTheme.typography.bodyMedium,
             color = Cinema.TextDim,
         )
         Spacer(Modifier.height(18.dp))
         PrimaryButton("Allow file access") {
-            if (Build.VERSION.SDK_INT >= 30) context.startActivity(LocalMedia.allFilesAccessIntent(context))
-            else legacy.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+            request.launch(LocalMedia.permissions)
         }
     }
 }

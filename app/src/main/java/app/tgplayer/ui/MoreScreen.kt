@@ -124,8 +124,16 @@ fun MoreScreen(modifier: Modifier = Modifier) {
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.themoviedb.org"))) }
             }
         }
+        // Google Play requires a privacy policy link inside the app as well as on the store listing.
+        item {
+            ActionRow("Privacy policy", "What TG Player keeps on this phone and what it sends where") {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))) }
+            }
+        }
     }
 }
+
+const val PRIVACY_POLICY_URL = "https://github.com/savadks95/Android-Community-Video-Player/blob/main/docs/privacy-policy.md"
 
 @Composable
 private fun Group(title: String) =
