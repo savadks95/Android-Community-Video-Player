@@ -1,0 +1,5 @@
+# Unix script must keep LF line endings even when Windows git converts the rest
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.so binary

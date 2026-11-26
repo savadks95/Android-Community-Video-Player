@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: the signed-in UI with sample data, for screenshots without a Telegram login.
+             adb shell am start -n app.tgplayer/.DemoActivity -->
+        <activity
+            android:name=".DemoActivity"
+            android:exported="true"
+            android:process=":demo"
+            android:taskAffinity="app.tgplayer.demo" />
+    </application>
+</manifest>

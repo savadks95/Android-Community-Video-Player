@@ -1,0 +1,17 @@
+.gradle/
+.kotlin/
+build/
+.idea/
+*.iml
+# holds sdk.dir and the Telegram api_id/api_hash: never commit
+local.properties
+# Never publish signing keys, env files or service configs
+*.jks
+*.keystore
+*.p12
+*.pem
+.env
+.env.*
+google-services.json
+keystore.properties
+signing.properties

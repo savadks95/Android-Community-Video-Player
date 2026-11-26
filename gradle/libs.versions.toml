@@ -1,0 +1,37 @@
+[versions]
+agp = "9.5.1"
+kotlin = "2.4.21"
+composeBom = "2026.11.01"
+activityCompose = "1.13.0"
+annotation = "1.11.0"
+media3 = "1.11.1"
+junit = "4.13.2"
+smbj = "0.15.0"
+commonsNet = "3.13.0"
+sshj = "0.41.2"
+
+[libraries]
+# TDLib's generated TdApi.java uses @IntDef and friends
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+compose-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+media3-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
+media3-dash = { group = "androidx.media3", name = "media3-exoplayer-dash", version.ref = "media3" }
+media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "media3" }
+# SMB2/3 client for network drives (Windows shares, NAS)
+smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
+# FTP client for network drives
+commons-net = { group = "commons-net", name = "commons-net", version.ref = "commonsNet" }
+# SFTP client for network drives
+sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+# AGP 9 compiles Kotlin itself (built-in Kotlin); only the Compose compiler plugin is added.
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

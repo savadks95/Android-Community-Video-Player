@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer (Android 13+): the system tints this one shape with the wallpaper's colours. The disc with
+     the play glyph cut out (evenOdd), slightly smaller than the foreground, as themed glyphs sit lighter. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,32a22,22 0 1,1 0,44a22,22 0 1,1 0,-44zM49.5,48.17v11.65c0,0.89,0.98,1.43,1.73,0.94l9.16,-5.83c0.7,-0.44,0.7,-1.45,0,-1.9L51.23,47.23C50.48,46.74,49.5,47.28,49.5,48.17z" />
+</vector>

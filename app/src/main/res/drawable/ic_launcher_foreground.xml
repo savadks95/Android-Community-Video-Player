@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon foreground: the app's LogoMark (projector-amber disc, ink play glyph at 0.62 of the disc), lit
+     from above with a soft shadow below. Disc diameter 50 inside the 66dp safe zone, so no launcher mask clips it.
+     The glyph is Material Icons Rounded play_arrow scaled from its 24-unit box to 31, centred on the canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#40000000"
+        android:pathData="M54,30.5a25,25 0 1,1 0,50a25,25 0 1,1 0,-50z" />
+    <path android:pathData="M54,29a25,25 0 1,1 0,50a25,25 0 1,1 0,-50z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="29"
+                android:endX="54"
+                android:endY="79"
+                android:startColor="#FFFFD27A"
+                android:endColor="#FFF0A830" />
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FF1B1405"
+        android:pathData="M48.83,47.31v13.38c0,1.02,1.12,1.64,1.99,1.08l10.51,-6.69c0.8,-0.5,0.8,-1.67,0,-2.18L50.82,46.22C49.96,45.67,48.83,46.29,48.83,47.31z" />
+</vector>

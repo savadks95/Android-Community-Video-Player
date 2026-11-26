@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ start-up splash: the launcher icon on the velvet stage, so it runs straight into LaunchIntro. -->
+    <style name="Theme.TGPlayer" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowSplashScreenBackground">#FF14111D</item>
+    </style>
+</resources>
