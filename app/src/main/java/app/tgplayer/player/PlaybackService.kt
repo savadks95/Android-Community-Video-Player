@@ -37,8 +37,14 @@ import app.tgplayer.data.Store
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
 
+    companion object {
+        /** True while the service is alive, so the UI's mini player connects only to a player that exists. */
+        @Volatile var running = false
+    }
+
     override fun onCreate() {
         super.onCreate()
+        running = true
         Telegram.start(this)
         Store.init(this)
         Settings.init(this)
@@ -142,6 +148,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        running = false
         StreamCache.cancel()
         AudioFx.release()
         CastServer.stop()

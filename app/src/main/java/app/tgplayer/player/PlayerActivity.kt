@@ -172,7 +172,7 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
             }
             controller.addListener(listener)
             player = controller
-            if (savedInstanceState == null) lifecycleScope.launch { load(controller) } else syncFromPlayer(controller)
+            if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_OPEN_ONLY, false)) lifecycleScope.launch { load(controller) } else syncFromPlayer(controller)
         }, ContextCompat.getMainExecutor(this))
 
         lifecycleScope.launch {
@@ -283,7 +283,11 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
             .setMediaId(uriString)
             .setUri(playUri)
             .setSubtitleConfigurations(subs)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(name).setArtist(sourceLabel(uri)).build())
+            // Music keeps the artist and album from the file's own tags (the session merges them in); other files show their source.
+            .setMediaMetadata(
+                MediaMetadata.Builder().setTitle(name)
+                    .apply { if (playableKind(null, uri.lastPathSegment) != MediaKind.AUDIO) setArtist(sourceLabel(uri)) }.build(),
+            )
             .build()
     }
 
@@ -377,7 +381,6 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
     private fun PlayerScreen() {
         val p = player
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            if (audioOnly) AudioArt()
             AndroidView(
                 factory = { context ->
                     PlayerView(context).apply {
@@ -402,7 +405,9 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
                 },
                 modifier = Modifier.fillMaxSize(),
             )
-            if (p != null && !inPip) PlayerOverlay(p, this@PlayerActivity, audioOnly)
+            if (p != null && !inPip) {
+                if (audioOnly) MusicPlayerScreen(p, this@PlayerActivity) { FallbackArt(it) } else PlayerOverlay(p, this@PlayerActivity, false)
+            }
             // Telegram's video ads (required by the Telegram API terms); hidden, and their timers paused, in picture-in-picture.
             adRef?.takeIf { !audioOnly }?.let { ref ->
                 VideoAdBox(
@@ -424,23 +429,15 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
         }
     }
 
+    /** Cover for music without embedded art: Telegram's thumbnail, the file's picture, or a gradient. */
     @Composable
-    private fun AudioArt() {
-        Column(
-            Modifier.fillMaxSize().safeDrawingPadding().padding(top = 110.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val art = Modifier.width(250.dp).aspectRatio(1f).clip(MaterialTheme.shapes.large)
-            val tg = telegramItem
-            val uri = currentUri?.let(Uri::parse)
-            when {
-                tg != null -> TdImage(tg.thumb, tg.miniThumb, art) { GradientPlaceholder(tg.title, MediaKind.AUDIO) }
-                uri?.scheme == "file" -> LocalThumb(uri.path.orEmpty(), MediaKind.AUDIO, art) { GradientPlaceholder(currentTitle, MediaKind.AUDIO) }
-                else -> Box(art) { GradientPlaceholder(currentTitle, MediaKind.AUDIO) }
-            }
-            Spacer(Modifier.height(24.dp))
-            Text(currentTitle, Modifier.padding(horizontal = 32.dp), style = MaterialTheme.typography.headlineSmall, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-            Text(currentSubtitle, style = MaterialTheme.typography.bodyMedium, color = Cinema.TextDim, maxLines = 1)
+    private fun FallbackArt(modifier: Modifier) {
+        val tg = telegramItem
+        val uri = currentUri?.let(Uri::parse)
+        when {
+            tg != null -> TdImage(tg.thumb, tg.miniThumb, modifier) { GradientPlaceholder(tg.title, MediaKind.AUDIO) }
+            uri?.scheme == "file" -> LocalThumb(uri.path.orEmpty(), MediaKind.AUDIO, modifier) { GradientPlaceholder(currentTitle, MediaKind.AUDIO) }
+            else -> Box(modifier) { GradientPlaceholder(currentTitle, MediaKind.AUDIO) }
         }
     }
 
@@ -695,6 +692,11 @@ class PlayerActivity : ComponentActivity(), PlayerHost {
         private const val EXTRA_URIS = "uris"
         private const val EXTRA_TITLES = "titles"
         private const val EXTRA_INDEX = "index"
+        private const val EXTRA_OPEN_ONLY = "open_only"
+
+        /** Opens the player on whatever is already playing (from the mini player), without loading anything. */
+        fun openCurrent(context: Context): Intent =
+            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_OPEN_ONLY, true)
 
         fun intent(context: Context, chatId: Long, messageId: Long): Intent =
             Intent(context, PlayerActivity::class.java).putExtra(EXTRA_CHAT, chatId).putExtra(EXTRA_MESSAGE, messageId)

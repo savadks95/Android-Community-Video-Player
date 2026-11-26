@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 17+: talking to other devices on the Wi-Fi (Drop It) -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <!-- click-wheel tick on the Continue watching rail -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- background music: PlaybackService runs as a media foreground service -->

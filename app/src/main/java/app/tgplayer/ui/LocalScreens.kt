@@ -76,6 +76,7 @@ import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SdCard
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -504,57 +505,6 @@ internal fun Modifier.bleed(by: Dp) = layout { measurable, constraints ->
     layout(constraints.maxWidth, placeable.height) { placeable.place(-extra / 2, 0) }
 }
 
-// ─── Music ────────────────────────────────────────────────────────────────────
-
-@Composable
-fun MusicTab(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val access = rememberFileAccess()
-    val resumes by AppEvents.resumed.collectAsState()
-    val songs by produceState<List<LocalItem>?>(null, resumes, access) {
-        value = if (access) runCatching { LocalMedia.songs(context) }.getOrDefault(emptyList()) else emptyList()
-    }
-    var query by rememberSaveable { mutableStateOf("") }
-    val shown = songs.orEmpty().filter { query.isBlank() || it.title.contains(query, true) || it.artist?.contains(query, true) == true }
-
-    LazyColumn(modifier, contentPadding = bottomPad) {
-        item { BrandHeader("Music", "${songs?.size ?: 0} songs on this phone") }
-        if (!access) {
-            item { AccessGate() }
-            return@LazyColumn
-        }
-        item {
-            Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                SearchField(query, { query = it }, "Song or artist", Modifier.weight(1f))
-                Spacer(Modifier.width(10.dp))
-                Box(
-                    Modifier.size(52.dp).clip(RoundedCornerShape(50)).background(Cinema.Accent)
-                        .clickableCompat { if (shown.isNotEmpty()) context.play(shown.shuffled(), 0) },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Shuffle, "Shuffle all", tint = Cinema.OnAccent) }
-            }
-        }
-        when {
-            songs == null -> item { LoadingRow() }
-            shown.isEmpty() -> item { EmptyState("No songs", if (query.isBlank()) "Music files on this phone appear here." else "Nothing matches “$query”.") }
-            else -> itemsIndexed(shown, key = { _, s -> s.path }) { i, s ->
-                ListRow(
-                    s.title,
-                    listOfNotNull(s.artist, if (s.durationMs > 0) formatDuration((s.durationMs / 1000).toInt()) else null).joinToString(" · "),
-                    { context.play(shown, i) },
-                    leading = {
-                        LocalThumb(s.path, MediaKind.AUDIO, Modifier.size(52.dp).clip(MaterialTheme.shapes.small)) {
-                            Box(Modifier.fillMaxSize().background(paletteFor(s.title)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(alpha = 0.5f))
-                            }
-                        }
-                    },
-                )
-            }
-        }
-    }
-}
-
 // ─── Browse ───────────────────────────────────────────────────────────────────
 
 @Composable
@@ -565,15 +515,21 @@ fun BrowseTab(onOpenTelegram: () -> Unit, modifier: Modifier = Modifier) {
     var network by remember { mutableStateOf(false) }
     var netDir by rememberSaveable { mutableStateOf<String?>(null) }
     var jellyfin by rememberSaveable { mutableStateOf(false) }
+    var dropIt by rememberSaveable { mutableStateOf<List<String>?>(null) } // files to start with when open
     var jellyfinSignIn by remember { mutableStateOf(false) }
     var drives by remember { mutableStateOf(NetworkDrives.all()) }
     var addDrive by remember { mutableStateOf(false) }
     var removeDrive by remember { mutableStateOf<NetworkDrive?>(null) }
     val roots = remember { LocalMedia.roots(context) }
 
+    val drop = dropIt
+    if (drop != null) {
+        DropItScreen(drop, onExit = { dropIt = null }, modifier)
+        return
+    }
     val current = dir
     if (current != null && access) {
-        FileBrowser(File(current), roots.map { it.second.path }, onNavigate = { dir = it }, modifier)
+        FileBrowser(File(current), roots.map { it.second.path }, onNavigate = { dir = it }, onDrop = { dropIt = listOf(it) }, modifier)
         return
     }
     if (jellyfin) {
@@ -604,6 +560,11 @@ fun BrowseTab(onOpenTelegram: () -> Unit, modifier: Modifier = Modifier) {
                 "Jellyfin", server?.let { "${it.name} · ${it.userName}" } ?: "Sign in to your Jellyfin server",
                 { if (Jellyfin.server != null) jellyfin = true else jellyfinSignIn = true },
             ) { IconTile(Icons.Rounded.Dns, Brush.linearGradient(listOf(Color(0xFFAA5CC3), Color(0xFF00A4DC)))) }
+        }
+        item {
+            ListRow("Drop It", "Send files to phones nearby on the same Wi-Fi", { dropIt = emptyList() }) {
+                IconTile(Icons.Rounded.WifiTethering, Brush.linearGradient(listOf(Color(0xFFFF8A3D), Color(0xFFE8457A))))
+            }
         }
         item { SectionTitle("Storage", Modifier.padding(start = 8.dp, top = 16.dp, bottom = 4.dp)) }
         if (!access) item { AccessGate() }
@@ -838,9 +799,9 @@ internal fun LibraryToggle(folderUri: String) {
     }
 }
 
-/** Folder view: subfolders, then playable files. Playing a file queues the rest of the folder. */
+/** Folder view: subfolders, then playable files. Playing a file queues the rest of the folder; long-press sends it with Drop It. */
 @Composable
-private fun FileBrowser(dir: File, roots: List<String>, onNavigate: (String?) -> Unit, modifier: Modifier) {
+private fun FileBrowser(dir: File, roots: List<String>, onNavigate: (String?) -> Unit, onDrop: (String) -> Unit, modifier: Modifier) {
     val context = LocalContext.current
     val up: () -> Unit = { onNavigate(if (dir.path in roots) null else dir.parent) }
     BackHandler(onBack = up)
@@ -859,6 +820,7 @@ private fun FileBrowser(dir: File, roots: List<String>, onNavigate: (String?) ->
                 } else {
                     ListRow(
                         e.file.name, formatSize(item.sizeBytes), { context.play(media, media.indexOf(item)) },
+                        onLongClick = { onDrop(item.uri) },
                         leading = {
                             LocalThumb(item.path, item.kind, Modifier.size(width = 78.dp, height = 44.dp).clip(MaterialTheme.shapes.small)) {
                                 Box(Modifier.fillMaxSize().background(paletteFor(item.title)), contentAlignment = Alignment.Center) {

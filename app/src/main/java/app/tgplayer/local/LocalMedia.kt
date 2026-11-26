@@ -24,6 +24,9 @@ data class LocalItem(
     val modified: Long,
     val durationMs: Long = 0,
     val artist: String? = null,
+    val album: String? = null,
+    val albumId: Long = 0,
+    val track: Int = 0,
 ) {
     val uri: String get() = Uri.fromFile(File(path)).toString()
 }
@@ -93,21 +96,49 @@ object LocalMedia {
         }.orEmpty().filter { File(it.path).exists() }
     }
 
+    /** Folders whose audio is chat voice notes and recordings, not music (lower-case path fragments). */
+    private val NOT_MUSIC_DIRS = listOf(
+        "/whatsapp", "/android/media/com.whatsapp", "/telegram", "/android/media/org.telegram",
+        "/signal", "/messenger", "/recordings", "/voice recorder", "/voicerecorder",
+    )
+    private const val MIN_SONG_MS = 30_000L
+
+    /**
+     * The phone's music library, the way music apps read it: MediaStore's own "music" flag, minus ringtones,
+     * notifications, alarms, podcasts, audiobooks and recordings. With [hideChatAudio], also minus clips under
+     * 30 s and files in chat-app folders (WhatsApp, Telegram…), since those voice notes are tagged as music too.
+     */
     @Suppress("DEPRECATION")
-    suspend fun songs(context: Context): List<LocalItem> = withContext(Dispatchers.IO) {
+    suspend fun songs(context: Context, hideChatAudio: Boolean = true): List<LocalItem> = withContext(Dispatchers.IO) {
         val cols = arrayOf(
             MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ALBUM_ID, MediaStore.Audio.Media.TRACK,
         )
-        context.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cols, "${MediaStore.Audio.Media.IS_MUSIC} != 0", null,
-            "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE",
-        )?.use { c ->
+        val where = buildList {
+            add("${MediaStore.Audio.Media.IS_MUSIC} != 0")
+            add("${MediaStore.Audio.Media.IS_RINGTONE} = 0")
+            add("${MediaStore.Audio.Media.IS_NOTIFICATION} = 0")
+            add("${MediaStore.Audio.Media.IS_ALARM} = 0")
+            add("${MediaStore.Audio.Media.IS_PODCAST} = 0")
+            if (Build.VERSION.SDK_INT >= 29) add("${MediaStore.Audio.Media.IS_AUDIOBOOK} = 0")
+            if (Build.VERSION.SDK_INT >= 31) add("${MediaStore.Audio.Media.IS_RECORDING} = 0")
+            if (hideChatAudio) add("${MediaStore.Audio.Media.DURATION} >= $MIN_SONG_MS")
+        }.joinToString(" AND ")
+        context.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cols, where, null, "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE")?.use { c ->
             buildList {
                 while (c.moveToNext()) {
                     val path = c.getString(0) ?: continue
+                    if (hideChatAudio && path.lowercase().let { p -> NOT_MUSIC_DIRS.any { it in p } }) continue
                     val artist = c.getString(2)?.takeIf { it != MediaStore.UNKNOWN_STRING }
-                    add(LocalItem(path, c.getString(1) ?: File(path).nameWithoutExtension, MediaKind.AUDIO, c.getLong(4), c.getLong(5) * 1000, c.getLong(3), artist))
+                    val album = c.getString(6)?.takeIf { it.isNotBlank() }
+                    // TRACK is disc*1000+track on many files; keep the track part.
+                    add(
+                        LocalItem(
+                            path, c.getString(1) ?: File(path).nameWithoutExtension, MediaKind.AUDIO, c.getLong(4), c.getLong(5) * 1000,
+                            c.getLong(3), artist, album, c.getLong(7), c.getInt(8) % 1000,
+                        ),
+                    )
                 }
             }
         }.orEmpty()

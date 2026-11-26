@@ -20,7 +20,7 @@ data class Progress(val ref: Ref, val positionMs: Long, val durationMs: Long) {
 }
 
 /**
- * The app's own data: Favourites, Watch later and playback positions, in a small SQLite file.
+ * The app's own data: Favourites, Watch later, playback positions and music playlists, in a small SQLite file.
  * tails: plain SQLiteOpenHelper instead of Room (no KSP); move to Room if the schema grows past a few tables.
  */
 object Store {
@@ -32,7 +32,7 @@ object Store {
     /** [fileName] is overridden only by the debug demo, so sample data never mixes with real lists. */
     fun init(context: Context, fileName: String = "library.db") {
         if (::db.isInitialized) return
-        db = object : SQLiteOpenHelper(context.applicationContext, fileName, null, 2) {
+        db = object : SQLiteOpenHelper(context.applicationContext, fileName, null, 3) {
             override fun onCreate(db: SQLiteDatabase) {
                 db.execSQL(
                     "CREATE TABLE saved(list TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, " +
@@ -43,10 +43,21 @@ object Store {
                         "duration_ms INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(chat_id, message_id))",
                 )
                 createHistory(db)
+                createPlaylists(db)
             }
 
             override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
                 if (oldVersion < 2) createHistory(db)
+                if (oldVersion < 3) createPlaylists(db)
+            }
+
+            /** v3: music playlists; songs are file paths in play order. */
+            private fun createPlaylists(db: SQLiteDatabase) {
+                db.execSQL("CREATE TABLE playlist(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at INTEGER NOT NULL)")
+                db.execSQL(
+                    "CREATE TABLE playlist_song(playlist_id INTEGER NOT NULL, path TEXT NOT NULL, position INTEGER NOT NULL, " +
+                        "PRIMARY KEY(playlist_id, path))",
+                )
             }
 
             /** v2: local files and network links (Telegram items stay in `progress`). */
@@ -153,6 +164,79 @@ object Store {
                     put("${p.ref.chatId}/${p.ref.messageId}", p)
                 }
             }
+        }
+    }
+
+    // ─── Music playlists ───────────────────────────────────────────────────────
+
+    data class Playlist(val id: Long, val name: String, val paths: List<String>)
+
+    /** Every playlist, newest first, each with its songs' paths in order. */
+    suspend fun playlists(): List<Playlist> = io {
+        val r = db.readableDatabase
+        val songs = HashMap<Long, MutableList<String>>()
+        r.rawQuery("SELECT playlist_id, path FROM playlist_song ORDER BY playlist_id, position", null).use { c ->
+            while (c.moveToNext()) songs.getOrPut(c.getLong(0)) { mutableListOf() }.add(c.getString(1))
+        }
+        r.rawQuery("SELECT id, name FROM playlist ORDER BY created_at DESC", null).use { c ->
+            buildList { while (c.moveToNext()) add(Playlist(c.getLong(0), c.getString(1), songs[c.getLong(0)].orEmpty())) }
+        }
+    }
+
+    /** Creates an empty playlist and returns its id. */
+    suspend fun createPlaylist(name: String): Long {
+        val id = io {
+            db.writableDatabase.insert("playlist", null, ContentValues().apply {
+                put("name", name); put("created_at", System.currentTimeMillis())
+            })
+        }
+        _version.value++
+        return id
+    }
+
+    suspend fun renamePlaylist(id: Long, name: String) = write {
+        update("playlist", ContentValues().apply { put("name", name) }, "id=?", arrayOf(id.toString()))
+    }
+
+    suspend fun deletePlaylist(id: Long) = write {
+        delete("playlist_song", "playlist_id=?", arrayOf(id.toString()))
+        delete("playlist", "id=?", arrayOf(id.toString()))
+    }
+
+    /** Appends [paths] to the end; songs already in the playlist stay where they are. */
+    suspend fun addToPlaylist(id: Long, paths: List<String>) = write {
+        beginTransaction()
+        try {
+            var next = rawQuery("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_song WHERE playlist_id=?", arrayOf(id.toString()))
+                .use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            for (path in paths) {
+                val row = ContentValues().apply { put("playlist_id", id); put("path", path); put("position", next) }
+                if (insertWithOnConflict("playlist_song", null, row, SQLiteDatabase.CONFLICT_IGNORE) != -1L) next++
+            }
+            setTransactionSuccessful()
+        } finally {
+            endTransaction()
+        }
+    }
+
+    suspend fun removeFromPlaylist(id: Long, path: String) = write {
+        delete("playlist_song", "playlist_id=? AND path=?", arrayOf(id.toString(), path))
+    }
+
+    /** Moves the song at [from] to [to] (indexes into the playlist's order). */
+    suspend fun movePlaylistSong(id: Long, from: Int, to: Int) = write {
+        val paths = rawQuery("SELECT path FROM playlist_song WHERE playlist_id=? ORDER BY position", arrayOf(id.toString()))
+            .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }.toMutableList()
+        if (from !in paths.indices || to !in paths.indices) return@write
+        paths.add(to, paths.removeAt(from))
+        beginTransaction()
+        try {
+            paths.forEachIndexed { i, path ->
+                update("playlist_song", ContentValues().apply { put("position", i) }, "playlist_id=? AND path=?", arrayOf(id.toString(), path))
+            }
+            setTransactionSuccessful()
+        } finally {
+            endTransaction()
         }
     }
 

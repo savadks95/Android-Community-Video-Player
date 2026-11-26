@@ -382,7 +382,7 @@ fun PlayerOverlay(player: Player, host: PlayerHost, audioOnly: Boolean) {
 /** Seek bar with what's buffered (white) and, for Telegram/links, what's downloaded to disk (cyan) behind it. */
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SeekBar(position: Long, duration: Long, buffered: Long, downloaded: Float?, preview: Long?, onSeek: (Long) -> Unit) {
+internal fun SeekBar(position: Long, duration: Long, buffered: Long, downloaded: Float?, preview: Long?, onSeek: (Long) -> Unit) {
     var dragging by remember { mutableStateOf(false) }
     val max = duration.coerceAtLeast(1).toFloat()
     val state = remember(max) { SliderState(0f, 0, 0f..max) }
@@ -428,7 +428,7 @@ private fun RoundIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun TracksSheet(player: Player, host: PlayerHost) {
+internal fun TracksSheet(player: Player, host: PlayerHost) {
     var refresh by remember { mutableStateOf(0) }
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState())) {
         key(refresh) {
@@ -501,7 +501,7 @@ private fun trackLabel(f: Format, n: Int): String {
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun OptionsSheet(player: Player, timers: PlaybackTimers, openEqualizer: () -> Unit) {
+internal fun OptionsSheet(player: Player, timers: PlaybackTimers, openEqualizer: () -> Unit) {
     var speed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
     var sleep by remember { mutableStateOf(timers.sleepLabel()) }
     var ab by remember { mutableStateOf(timers.abLabel()) }
@@ -559,7 +559,7 @@ private fun mediaInfo(player: Player): List<String> = player.currentTracks.group
 }
 
 /** Sleep timer and A-B loop, driven by the overlay's 250 ms tick. Lives as long as the player screen. */
-private class PlaybackTimers {
+internal class PlaybackTimers {
     var sleepChoice = 0; private set
     private var sleepAt: Long? = null
     var abA: Long? = null
@@ -602,11 +602,11 @@ private class PlaybackTimers {
 // ─── Small sheet parts ────────────────────────────────────────────────────────
 
 @Composable
-private fun SheetTitle(text: String) =
+internal fun SheetTitle(text: String) =
     Text(text, Modifier.padding(top = 18.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMedium)
 
 @Composable
-private fun Dim(text: String) =
+internal fun Dim(text: String) =
     Text(text, Modifier.padding(vertical = 2.dp), style = MaterialTheme.typography.bodySmall, color = Cinema.TextDim)
 
 @Composable

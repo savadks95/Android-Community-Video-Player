@@ -24,6 +24,8 @@ object Settings {
     /** Resume local files and links where they were left. */
     var resume by bool("resume", true)
     var showHiddenFiles by bool("show_hidden", false)
+    /** Music tab: leave out chat-app voice notes (WhatsApp, Telegram…) and clips under 30 s. */
+    var hideChatAudio by bool("hide_chat_audio", true)
     /** Use FFmpeg before the phone's own audio decoders (applies the next time playback starts fresh). */
     var preferFfmpeg by bool("prefer_ffmpeg", false)
     /** Subtitle text size as a fraction of video height (SubtitleView fractional size). */
