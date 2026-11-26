@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -28,7 +29,7 @@ fun maskSecret(value: String): String {
     if (value.isEmpty()) return ""
     val bytes = value.toByteArray(Charsets.UTF_8)
     for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor keyMask[i % keyMask.size]).toByte()
-    return java.util.Base64.getEncoder().encodeToString(bytes)
+    return Base64.getEncoder().encodeToString(bytes)
 }
 
 android {
