@@ -130,7 +130,7 @@ object OnlineSubtitles {
         try {
             c.connectTimeout = 15_000
             c.readTimeout = 20_000
-            c.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
+            c.setRequestProperty("Api-Key", app.tgplayer.Secrets.openSubtitles)
             c.setRequestProperty("User-Agent", "TG Player v${BuildConfig.VERSION_NAME}")
             c.setRequestProperty("Accept", "application/json")
             if (jsonBody != null) {

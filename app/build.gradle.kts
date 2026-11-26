@@ -19,6 +19,18 @@ val openSubtitlesApiKey = localProps.getProperty("opensubtitles.apiKey")?.trim()
 // Optional: a TMDb API key (https://www.themoviedb.org/settings/api), the source Jellyfin uses, adds posters and details to Library.
 val tmdbApiKey = localProps.getProperty("tmdb.apiKey")?.trim().orEmpty()
 
+// XOR-masks a secret so it ships as base64 noise in BuildConfig, not a readable string in the APK. Reversed by
+// app/src/main/java/app/tgplayer/Secrets.kt, which MUST keep the same bytes below and Base64.NO_WRAP.
+// tails: obfuscation only — the mask ships in the APK too, so this slows a casual `strings`/scraper, it does not
+// stop a determined reverse-engineer. Real fix: the server proxy (tgplayer-offers.vercel.app). An empty key stays empty.
+val keyMask = intArrayOf(0x5A, 0x1C, 0x77, 0x29, 0x6B, 0x3E, 0x42, 0x11)
+fun maskSecret(value: String): String {
+    if (value.isEmpty()) return ""
+    val bytes = value.toByteArray(Charsets.UTF_8)
+    for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor keyMask[i % keyMask.size]).toByte()
+    return java.util.Base64.getEncoder().encodeToString(bytes)
+}
+
 android {
     namespace = "app.tgplayer"
     // Compose 1.13 (BOM 2026.11.01) needs compileSdk 37.1+
@@ -35,9 +47,11 @@ android {
         versionName = "0.1"
 
         buildConfigField("int", "TELEGRAM_API_ID", telegramApiId)
-        buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
-        buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"$openSubtitlesApiKey\"")
-        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+        buildConfigField("String", "TELEGRAM_API_HASH", "\"${maskSecret(telegramApiHash)}\"")
+        buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${maskSecret(openSubtitlesApiKey)}\"")
+        buildConfigField("String", "TMDB_API_KEY", "\"${maskSecret(tmdbApiKey)}\"")
+        // Known plaintext, masked the same way: Secrets' init unmasks it and fails fast if the two sides drift.
+        buildConfigField("String", "SECRET_CANARY", "\"${maskSecret("TGPlayer")}\"")
     }
 
     buildFeatures {

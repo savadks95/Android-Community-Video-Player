@@ -98,7 +98,7 @@ object Telegram {
         useChatInfoDatabase = true
         useMessageDatabase = true
         apiId = BuildConfig.TELEGRAM_API_ID
-        apiHash = BuildConfig.TELEGRAM_API_HASH
+        apiHash = Secrets.telegramApiHash
         systemLanguageCode = Locale.getDefault().toLanguageTag()
         deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
         systemVersion = "" // empty = TDLib detects it

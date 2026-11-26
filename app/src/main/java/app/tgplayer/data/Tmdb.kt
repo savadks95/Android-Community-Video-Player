@@ -159,7 +159,7 @@ object Tmdb {
         if (cached.exists() && (offline || System.currentTimeMillis() - cached.lastModified() < MAX_AGE_MS)) return old()
         if (offline) return null
         val body = try {
-            fetch("$API$path?$query&api_key=${BuildConfig.TMDB_API_KEY}")
+            fetch("$API$path?$query&api_key=${app.tgplayer.Secrets.tmdb}")
         } catch (e: IOException) {
             if (cached.exists()) return old() else throw e
         }
