@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "tails": {
+      "source": {
+        "source": "github",
+        "repo": "savadks95/LLM_Tails"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "llm-tails@tails": true
+  }
+}
