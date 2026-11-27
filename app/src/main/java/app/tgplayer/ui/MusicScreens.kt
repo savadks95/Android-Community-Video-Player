@@ -103,6 +103,7 @@ import app.tgplayer.local.LocalItem
 import app.tgplayer.local.LocalMedia
 import app.tgplayer.player.PlaybackService
 import app.tgplayer.player.PlayerActivity
+import app.tgplayer.player.rememberPlayerEvents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -600,17 +601,8 @@ private fun rememberMusicController(): MediaController? {
 @Composable
 private fun MiniBar(player: Player, modifier: Modifier) {
     val context = LocalContext.current
-    var version by remember(player) { mutableIntStateOf(0) }
+    val version = rememberPlayerEvents(player)
     var positionMs by remember(player) { mutableLongStateOf(0) }
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) {
-                version++
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
     LaunchedEffect(player) {
         while (true) {
             positionMs = player.currentPosition

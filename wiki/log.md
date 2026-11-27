@@ -67,7 +67,16 @@ Build + unit tests green.
   with opt* (no per-field throw). DropIt.kt.
 - miss-set leak (part of #10): `noThumb`/`noNetThumb` are now bounded `LruCache(512)`, not growing HashSets.
 
-Deferred (pure consolidation, change Compose update timing — want on-device verification): #10 shared
-`ThumbBox` extraction across the four image loaders, #11 `rememberPlayerPulse` helper. Also open: nice-to-
-haves (#13 sha1 util, #14 http error typing, #15 bare close, #16 LIMIT bind, #17 Settings JSON, #18 wiki
-security page) and #12 queue-key (needs a composite key or duplicate mediaId re-crashes like #1).
+Open: nice-to-haves (#13 sha1 util, #14 http error typing, #15 bare close, #16 LIMIT bind, #17 Settings
+JSON, #18 wiki security page) and #12 queue-key (needs a composite key or duplicate mediaId re-crashes
+like #1).
+
+## [2026-11-27] refactor | Consolidation refactors (#10, #11) landed
+Build + unit tests green; behaviour preserved (wants on-device confirmation of scroll/player redraw).
+- #10 shared `ThumbBox` (ui/ThumbBox.kt): the state-seed + LaunchedEffect + Box/Image/placeholder
+  skeleton the single-bitmap loaders shared now lives once; WebImage/LocalThumb/NetThumb became a
+  `seed` + `load` lambda (each keeping its own cache, disk/net fetch, Semaphore, miss-set). TdImage
+  stays bespoke (its blurred mini-thumb underlay is a two-layer render only it needs — not forced in).
+- #11 `rememberPlayerEvents(player)` (in MusicPlayerScreen.kt): the identical `version++` Player.Listener
+  DisposableEffect that MusicPlayerScreen and MiniBar both had is now one helper. PlayerOverlay is left
+  as-is (poll-only, no listener to dedup).

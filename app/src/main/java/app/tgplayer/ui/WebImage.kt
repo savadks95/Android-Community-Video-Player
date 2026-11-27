@@ -2,15 +2,8 @@ package app.tgplayer.ui
 
 import android.graphics.BitmapFactory
 import android.util.LruCache
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -38,15 +31,8 @@ fun WebImage(
 ) {
     val context = LocalContext.current
     val dir = remember(context) { File(context.cacheDir, "images") } // was reallocated every recomposition
-    var bitmap by remember(url) { mutableStateOf(url?.let { webCache.get(it) }) }
-    LaunchedEffect(url) {
-        if (bitmap == null && url != null) {
-            bitmap = withContext(Dispatchers.IO) { runCatching { load(dir, url) }.getOrNull() }?.also { webCache.put(url, it) }
-        }
-    }
-    Box(modifier) {
-        val b = bitmap
-        if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = contentScale) else placeholder()
+    ThumbBox(url, { webCache.get(it) }, modifier, contentScale, placeholder) { key ->
+        withContext(Dispatchers.IO) { runCatching { load(dir, key) }.getOrNull() }?.also { webCache.put(key, it) }
     }
 }
 

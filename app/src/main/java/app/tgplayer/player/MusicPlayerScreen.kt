@@ -95,11 +95,29 @@ private enum class MusicSheet { OPTIONS, EQUALIZER, QUEUE }
  * title / artist / album, seek bar, shuffle and repeat, and the equalizer, sleep timer, speed and queue.
  * Swipe the cover sideways to skip. Clean-room design; the sheets are the video player's own.
  */
+/**
+ * A counter bumped on every Player event. Read it in composition to re-read live player state
+ * (metadata, isPlaying, shuffle/repeat) that isn't Compose-observable. Extracted from the identical
+ * listener MusicPlayerScreen and MiniBar both had.
+ */
+@Composable
+fun rememberPlayerEvents(player: Player): Int {
+    var version by remember(player) { mutableIntStateOf(0) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) { version++ }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    return version
+}
+
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @OptIn(UnstableApi::class)
 @Composable
 fun MusicPlayerScreen(player: Player, host: PlayerHost, fallbackArt: @Composable (Modifier) -> Unit) {
-    var version by remember { mutableIntStateOf(0) }
+    val version = rememberPlayerEvents(player)
     var position by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var buffered by remember { mutableLongStateOf(0L) }
@@ -107,15 +125,6 @@ fun MusicPlayerScreen(player: Player, host: PlayerHost, fallbackArt: @Composable
     var sheet by remember { mutableStateOf<MusicSheet?>(null) }
     val timers = remember { PlaybackTimers() }
 
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) {
-                version++
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
     LaunchedEffect(player) {
         while (true) {
             position = player.currentPosition

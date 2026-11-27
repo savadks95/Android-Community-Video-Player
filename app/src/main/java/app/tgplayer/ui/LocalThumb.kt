@@ -8,19 +8,10 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.LruCache
 import android.util.Size
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import app.tgplayer.data.MediaKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,16 +26,10 @@ private val noThumb = LruCache<String, Boolean>(512) // files we already know ha
 /** Video frame or embedded album art for a file on the phone; [placeholder] until/unless one exists. */
 @Composable
 fun LocalThumb(path: String, kind: MediaKind, modifier: Modifier = Modifier, placeholder: @Composable () -> Unit = {}) {
-    var bitmap by remember(path) { mutableStateOf(localCache.get(path)) }
-    LaunchedEffect(path) {
-        if (bitmap == null && noThumb.get(path) == null) {
-            bitmap = withContext(Dispatchers.IO) { runCatching { load(path, kind) }.getOrNull() }
-            bitmap?.let { localCache.put(path, it) } ?: noThumb.put(path, true)
-        }
-    }
-    Box(modifier) {
-        val b = bitmap
-        if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) else placeholder()
+    ThumbBox(path, { localCache.get(it) }, modifier, placeholder = placeholder) { key ->
+        if (noThumb.get(key) != null) null
+        else withContext(Dispatchers.IO) { runCatching { load(key, kind) }.getOrNull() }
+            ?.also { localCache.put(key, it) } ?: run { noThumb.put(key, true); null }
     }
 }
 
