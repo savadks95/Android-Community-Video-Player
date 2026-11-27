@@ -55,23 +55,36 @@ class EqualizerProcessor(private val eq: () -> AudioFx.Eq = { AudioFx.eq }) : Ba
         val settings = eq()
         if (settings !== applied) apply(settings)
         val out = replaceOutputBuffer(size)
+        // Bulk-copy the PCM into a primitive array, filter in place, bulk-copy back (OPT-5): the per-sample
+        // ByteBuffer.short/putShort calls ran ~96k times a second on the audio thread. The per-sample math
+        // in process() and the channel interleaving are unchanged, so the output bytes are identical.
         if (!on) {
             out.put(inputBuffer)
         } else if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
             val channels = inputAudioFormat.channelCount
+            val samples = ShortArray(size / 2)
+            inputBuffer.asShortBuffer().get(samples)
             var c = 0
-            while (inputBuffer.hasRemaining()) {
-                val y = process(inputBuffer.short / 32768.0, c, channels)
-                out.putShort((y * 32767.0).toInt().coerceIn(-32768, 32767).toShort())
+            for (j in samples.indices) {
+                val y = process(samples[j] / 32768.0, c, channels)
+                samples[j] = (y * 32767.0).toInt().coerceIn(-32768, 32767).toShort()
                 if (++c == channels) c = 0
             }
+            out.asShortBuffer().put(samples)
+            inputBuffer.position(inputBuffer.limit())
+            out.position(size)
         } else {
             val channels = inputAudioFormat.channelCount
+            val samples = FloatArray(size / 4)
+            inputBuffer.asFloatBuffer().get(samples)
             var c = 0
-            while (inputBuffer.hasRemaining()) {
-                out.putFloat(process(inputBuffer.float.toDouble(), c, channels).toFloat())
+            for (j in samples.indices) {
+                samples[j] = process(samples[j].toDouble(), c, channels).toFloat()
                 if (++c == channels) c = 0
             }
+            out.asFloatBuffer().put(samples)
+            inputBuffer.position(inputBuffer.limit())
+            out.position(size)
         }
         out.flip()
         if (on) flushDenormals()

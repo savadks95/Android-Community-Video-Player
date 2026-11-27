@@ -13,6 +13,13 @@ snapshot — update `status` as items land.
 Legend — rung: the lowest ladder step that fixes it. status: `open` /
 `proposed` / `done` / `deferred`.
 
+**Landed on `CodeOptimization` (2026-11-27, build + unit tests green):** OPT-2, OPT-3, OPT-4,
+OPT-5, OPT-10 done; OPT-1 done in part (`@Immutable`/`@Stable` + off-main decode; the per-item
+download-progress state scoping is deferred). Deferred: OPT-6 (queue key unsafe with duplicate
+songs; player `version++` rewrite needs on-device verification), OPT-7 (cast-only, unverifiable
+here), OPT-8 (R8 — device release test). OPT-9 not feasible: ~90 distinct icons, many only in
+`material-icons-extended`, so dropping it breaks the build — R8 (OPT-8) is the real size fix.
+
 ## Tier 1 — runtime, high impact, contained, verifiable
 
 ### OPT-1 · Telegram grid recomposition storm · impact HIGH · risk MED

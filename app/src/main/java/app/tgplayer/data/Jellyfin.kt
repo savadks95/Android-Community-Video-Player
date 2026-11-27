@@ -53,10 +53,22 @@ data class JellyfinItem(
 object Jellyfin {
     const val SCHEME = "jellyfin"
 
+    // Parsed once per stored value: the getter runs per poster while scrolling a Jellyfin library.
+    // Keyed on the raw JSON string, so it re-parses iff the stored value actually changed (OPT-3).
+    @Volatile private var cachedServer: JellyfinServer? = null
+    @Volatile private var cachedJson: String? = null
+
     var server: JellyfinServer?
-        get() = runCatching {
-            JSONObject(Settings.jellyfinJson).run { JellyfinServer(getString("url"), getString("name"), getString("userId"), getString("userName"), getString("token")) }
-        }.getOrNull()
+        get() {
+            val json = Settings.jellyfinJson
+            if (json != cachedJson) {
+                cachedServer = runCatching {
+                    JSONObject(json).run { JellyfinServer(getString("url"), getString("name"), getString("userId"), getString("userName"), getString("token")) }
+                }.getOrNull()
+                cachedJson = json
+            }
+            return cachedServer
+        }
         private set(value) {
             Settings.jellyfinJson = value?.let {
                 JSONObject().put("url", it.url).put("name", it.name).put("userId", it.userId).put("userName", it.userName).put("token", it.token).toString()

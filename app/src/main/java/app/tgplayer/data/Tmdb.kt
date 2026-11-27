@@ -11,6 +11,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /** A movie's or show's details. Image fields are TMDb paths; [Tmdb.image] turns them into URLs. */
 data class Meta(
@@ -143,8 +144,20 @@ object Tmdb {
 
     private fun normalize(title: String) = title.replace(Regex("[^\\p{L}\\p{N}\\p{M}]+"), " ").trim().lowercase()
 
-    private fun genres(kind: String, offline: Boolean): Map<Int, String> =
-        get("/genre/$kind/list", emptyMap(), offline)?.optJSONArray("genres")?.let(::objects).orEmpty().associate { it.optInt("id") to it.optString("name") }
+    // The genre list is tiny and effectively fixed; it was re-read from disk and re-parsed for every
+    // title in a scan. Memoize per kind+language for the process lifetime (OPT-4). Only a non-empty
+    // result is cached, so an offline startup miss doesn't shadow the later online fetch.
+    // tails: process-lifetime memo; a genre rename shows after an app restart, which never matters here.
+    private val genreCache = ConcurrentHashMap<String, Map<Int, String>>()
+
+    private fun genres(kind: String, offline: Boolean): Map<Int, String> {
+        val key = "$kind|${Locale.getDefault().toLanguageTag()}"
+        genreCache[key]?.let { return it }
+        val map = get("/genre/$kind/list", emptyMap(), offline)?.optJSONArray("genres")?.let(::objects).orEmpty()
+            .associate { it.optInt("id") to it.optString("name") }
+        if (map.isNotEmpty()) genreCache[key] = map
+        return map
+    }
 
     /**
      * A cached or fresh API response; null when [offline] and not cached. A 404 caches as `{}`.
@@ -164,9 +177,11 @@ object Tmdb {
             if (cached.exists()) return old() else throw e
         }
         cacheDir.mkdirs()
-        val temp = File(cacheDir, "${cached.name}.part")
+        // Unique temp per writer: scans now fetch in parallel (OPT-4), so a shared "<name>.part" could
+        // be written by two threads at once. createTempFile gives each its own; the rename then wins last.
+        val temp = File.createTempFile(cached.name, ".part", cacheDir)
         temp.writeText(body)
-        if (!temp.renameTo(cached)) throw IOException("Couldn't save TMDb response")
+        if (!temp.renameTo(cached)) { temp.delete(); throw IOException("Couldn't save TMDb response") }
         return JSONObject(body)
     }
 

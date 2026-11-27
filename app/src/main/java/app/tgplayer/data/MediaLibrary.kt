@@ -8,10 +8,15 @@ import app.tgplayer.local.NetworkDrives
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -235,6 +240,7 @@ object MediaLibrary {
         Uri.Builder().scheme(TG_CHAT).authority("chat").appendPath(chatId.toString()).appendPath(title).build().toString()
 
     const val TG_CHAT = "tgchat"
+    private const val TMDB_CONCURRENCY = 6 // bounded parallel TMDb round trips per scan (OPT-4)
     private const val FULL_SCAN_AT = "fullScanAt"
     private const val FULL_SCAN_EVERY_MS = 7 * 24 * 60 * 60 * 1000L
     const val TG_MESSAGE = "tgmsg"
@@ -298,20 +304,24 @@ object MediaLibrary {
         return out.values.toList()
     }
 
-    private fun build(files: Map<String, Found>, offline: Boolean): Catalog {
+    // Online scans do a TMDb round trip per movie and per show/season; running them serially made a
+    // large library a long wait. Fan out with bounded concurrency (OPT-4) — fast without hammering the
+    // API. Offline scans (cache reads only) share the path harmlessly. Output order is unchanged: both
+    // lists are sorted below, so the result is identical to the serial version.
+    private suspend fun build(files: Map<String, Found>, offline: Boolean): Catalog {
         fun <T> lookup(block: () -> T?): T? = runCatching(block).getOrNull() // no network now: unmatched until the next scan
         val matches = readMatches()
         fun picked(key: String, kind: String) = matches.optInt(key, 0).takeIf { it > 0 }?.let { id -> lookup { Tmdb.byId(kind, id, offline) } }
         val parsed = files.mapNotNull { (uri, f) -> (f.name ?: Uri.parse(uri).path)?.let(Naming::parse)?.let { uri to it } }
-        val movies = parsed.mapNotNull { (uri, p) ->
-            (p as? Parsed.Movie)?.let {
-                val movie = LibraryMovie(uri, it.name, it.year, null, files[uri]?.added ?: 0)
-                movie.copy(meta = picked(matchKey(movie), "movie") ?: lookup { Tmdb.movie(it.name, it.year, offline) })
+        val movies = parsed.mapNotNull { (uri, p) -> (p as? Parsed.Movie)?.let { uri to it } }
+            .parallelMap { (uri, movie) ->
+                val m = LibraryMovie(uri, movie.name, movie.year, null, files[uri]?.added ?: 0)
+                m.copy(meta = picked(matchKey(m), "movie") ?: lookup { Tmdb.movie(movie.name, movie.year, offline) })
             }
-        }
         val shows = parsed.mapNotNull { (uri, p) -> (p as? Parsed.Episode)?.let { uri to it } }
             .groupBy { it.second.series.lowercase() }
-            .map { (_, episodes) ->
+            .toList()
+            .parallelMap { (_, episodes) ->
                 val first = episodes.first().second
                 val meta = picked("tv:${first.series.lowercase()}", "tv") ?: lookup { Tmdb.show(first.series, first.year, offline) }
                 val seasons = episodes.map { it.second.season }.distinct().associateWith { s ->
@@ -321,5 +331,11 @@ object MediaLibrary {
                 LibraryShow(first.series, first.year, meta, list.sortedWith(compareBy({ it.season }, { it.episode }, { it.uri })))
             }
         return Catalog(movies.sortedBy { it.title.lowercase() }, shows.sortedBy { it.title.lowercase() })
+    }
+
+    /** Runs [block] over the list with at most [TMDB_CONCURRENCY] calls in flight (bounded TMDb I/O). */
+    private suspend fun <T, R> List<T>.parallelMap(block: suspend (T) -> R): List<R> = coroutineScope {
+        val gate = Semaphore(TMDB_CONCURRENCY)
+        map { async { gate.withPermit { block(it) } } }.awaitAll()
     }
 }

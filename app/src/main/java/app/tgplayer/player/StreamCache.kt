@@ -118,7 +118,7 @@ object StreamCache {
  */
 class HttpDownload(val uri: Uri, val file: File) {
     private val rangesFile = File(file.path.removeSuffix(".data") + ".ranges")
-    private val ranges = ArrayList<LongArray>() // sorted, merged, [start, end)
+    private val ranges = RangeSet()
     private val writer = RandomAccessFile(file, "rw")
     private var thread: Thread? = null
     @Volatile private var generation = 0
@@ -130,13 +130,11 @@ class HttpDownload(val uri: Uri, val file: File) {
         loadRanges()
     }
 
-    val downloadedBytes: Long get() = synchronized(ranges) { ranges.sumOf { it[1] - it[0] } }
+    val downloadedBytes: Long get() = synchronized(ranges) { ranges.downloaded }
     val complete: Boolean get() = length >= 0 && nextMissing(0) == null
 
     /** Bytes on disk starting exactly at [pos] (0 if none yet). */
-    fun available(pos: Long): Long = synchronized(ranges) {
-        ranges.firstOrNull { pos >= it[0] && pos < it[1] }?.let { it[1] - pos } ?: 0
-    }
+    fun available(pos: Long): Long = synchronized(ranges) { ranges.available(pos) }
 
     /** Make sure bytes at [pos] are on their way; restarts the downloader there if it's elsewhere. */
     @Synchronized
@@ -261,33 +259,15 @@ class HttpDownload(val uri: Uri, val file: File) {
 
     // ─── Range bookkeeping ───────────────────────────────────────────────────
 
-    private fun addRange(start: Long, end: Long) = synchronized(ranges) {
-        ranges.add(longArrayOf(start, end))
-        ranges.sortBy { it[0] }
-        val merged = ArrayList<LongArray>()
-        for (r in ranges) {
-            val last = merged.lastOrNull()
-            if (last != null && r[0] <= last[1]) last[1] = maxOf(last[1], r[1]) else merged.add(r)
-        }
-        ranges.clear()
-        ranges.addAll(merged)
-    }
+    private fun addRange(start: Long, end: Long) = synchronized(ranges) { ranges.add(start, end) }
 
     /** First byte at or after [from] that isn't downloaded; null when the rest of the file is. */
-    private fun nextMissing(from: Long): Long? = synchronized(ranges) {
-        var p = from
-        for (r in ranges) {
-            if (r[1] <= p) continue
-            if (r[0] > p) break
-            p = r[1]
-        }
-        if (length >= 0 && p >= length) null else p
-    }
+    private fun nextMissing(from: Long): Long? = synchronized(ranges) { ranges.nextMissing(from, length) }
 
-    private fun nextRangeStart(after: Long): Long? = synchronized(ranges) { ranges.firstOrNull { it[0] > after }?.get(0) }
+    private fun nextRangeStart(after: Long): Long? = synchronized(ranges) { ranges.nextRangeStart(after) }
 
     private fun saveRanges() = runCatching {
-        val text = synchronized(ranges) { "$length\n" + ranges.joinToString("\n") { "${it[0]} ${it[1]}" } }
+        val text = synchronized(ranges) { "$length\n" + ranges.lines() }
         rangesFile.writeText(text)
         file.setLastModified(System.currentTimeMillis()) // recency for the cache trim
     }

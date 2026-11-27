@@ -36,7 +36,8 @@ fun WebImage(
     contentScale: ContentScale = ContentScale.Crop,
     placeholder: @Composable () -> Unit = {},
 ) {
-    val dir = File(LocalContext.current.cacheDir, "images")
+    val context = LocalContext.current
+    val dir = remember(context) { File(context.cacheDir, "images") } // was reallocated every recomposition
     var bitmap by remember(url) { mutableStateOf(url?.let { webCache.get(it) }) }
     LaunchedEffect(url) {
         if (bitmap == null && url != null) {

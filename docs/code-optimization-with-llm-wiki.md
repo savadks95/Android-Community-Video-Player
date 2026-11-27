@@ -68,16 +68,20 @@ Full detail and citations: `wiki/synthesis/optimization-targets.md`. Summary:
 
 | ID | Target | Area | Impact | Risk | Status |
 |----|--------|------|--------|------|--------|
-| OPT-1 | Telegram grid recomposition (stability + off-main decode + memoize) | Runtime/Compose | High | Med | proposed |
-| OPT-2 | Read-ahead range store O(n log n)→O(1), cached counters | Runtime/player | High | Low-Med | proposed |
-| OPT-3 | Cache parsed drives/Jellyfin config (stop per-item JSON re-parse) | Runtime/data | Med | Low | proposed |
-| OPT-4 | Library scan: memoize genres, bounded-parallel TMDb, no double build | Runtime/data | Med | Low-Med | proposed |
-| OPT-5 | Equalizer per-sample loop → bulk buffer | Runtime/audio | Med | Med | proposed |
-| OPT-6 | Player screens: scope state, key the queue | Runtime/Compose | Med | Med | proposed |
-| OPT-7 | CastServer: cache VTT, bound thread pool | Runtime | Med | Low-Med | proposed |
-| OPT-8 | **R8 minify + resource shrinking** | APK size | High | High | **deferred** (needs on-device release test) |
-| OPT-9 | Trim `material-icons-extended` | APK size | Med | Low-Med | proposed |
-| OPT-10 | `gradle.properties` build-speed flags | Build time | Low | Low | proposed |
+| OPT-1 | Telegram grid: `@Immutable`/`@Stable` models + off-main mini-thumb decode | Runtime/Compose | High | Med | **done** (stability + decode; progress-state scoping deferred) |
+| OPT-2 | Read-ahead range store O(n log n)→O(1) via `RangeSet` + running total | Runtime/player | High | Low-Med | **done** (+ unit test) |
+| OPT-3 | Cache parsed drives/Jellyfin config (stop per-item JSON re-parse) | Runtime/data | Med | Low | **done** |
+| OPT-4 | Library scan: memoize genres, bounded-parallel TMDb, safe cache writes | Runtime/data | Med | Low-Med | **done** |
+| OPT-5 | Equalizer per-sample loop → bulk `ShortArray`/`FloatArray` | Runtime/audio | Med | Med | **done** (identical output, test-guarded) |
+| OPT-6 | Player screens: scope state / key the queue | Runtime/Compose | Med | Med | **deferred** — queue key unsafe (duplicate songs); `version++` rewrite needs on-device check |
+| OPT-7 | CastServer: cache VTT, bound thread pool | Runtime | Med | Low-Med | **deferred** — cast-only, not verifiable without a receiver |
+| OPT-8 | **R8 minify + resource shrinking** | APK size | High | High | **deferred** — needs on-device release test |
+| OPT-9 | Trim `material-icons-extended` | APK size | Med | Low-Med | **not feasible** — ~90 icons, many extended-only; R8 (OPT-8) is the real fix |
+| OPT-10 | `gradle.properties` build-speed flags | Build time | Low | Low | **done** (parallel/caching/config-cache; build verified) |
+
+**Verified:** `./gradlew :app:testDebugUnitTest :app:assembleDebug` — BUILD SUCCESSFUL, all unit
+tests pass (incl. the new `RangeSetTest`, 6/6, and the `EqualizerProcessorTest`, 3/3), APK assembles.
+On-device smoke test still owed (playback, scrolling the Telegram grid, a library scan, the equalizer).
 
 **Deliberately not targets (YAGNI):** ABI splits (already two ARM ABIs, both
 needed), the DropIt /24 sweep cadence (by design — routers drop multicast; see

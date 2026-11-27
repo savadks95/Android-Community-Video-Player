@@ -79,13 +79,23 @@ object NetworkDrives {
     private val client by lazy { SMBClient(SmbConfig.builder().withTimeout(20, TimeUnit.SECONDS).withSoTimeout(30, TimeUnit.SECONDS).build()) }
     private val shares = ConcurrentHashMap<NetworkDrive, DiskShare>()
 
+    // Parsed once per stored value: all() runs inside every listing, file open and reconnect via
+    // forUri(). Keyed on the raw JSON string, so it re-parses iff the saved list changed (OPT-3).
+    @Volatile private var cachedDrives: List<NetworkDrive>? = null
+    @Volatile private var cachedJson: String? = null
+
     fun all(): List<NetworkDrive> {
-        val array = runCatching { JSONArray(Settings.networkDrivesJson) }.getOrDefault(JSONArray())
-        return (0 until array.length()).map { i ->
+        val json = Settings.networkDrivesJson
+        cachedDrives?.let { if (json == cachedJson) return it }
+        val array = runCatching { JSONArray(json) }.getOrDefault(JSONArray())
+        val drives = (0 until array.length()).map { i ->
             array.getJSONObject(i).run {
                 NetworkDrive(getString("host"), getString("share"), optString("user"), optString("password"), optString("domain"), optString("protocol", NetworkDrive.SMB), optString("hostKey"))
             }
         }
+        cachedDrives = drives
+        cachedJson = json
+        return drives
     }
 
     private fun save(drives: List<NetworkDrive>) {

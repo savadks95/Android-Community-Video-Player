@@ -166,7 +166,11 @@ fun MediaGrid(
     }
 }
 
-/** What a media tile can do; provided by the app shell. */
+/**
+ * What a media tile can do; provided by the app shell. @Stable: when the shell hands the same instance
+ * (no active download churning it), Compose may skip tiles whose item is unchanged (OPT-1).
+ */
+@Stable
 interface MediaActions {
     fun play(item: MediaItem)
     fun more(item: MediaItem)

@@ -1,5 +1,6 @@
 package app.tgplayer.data
 
+import androidx.compose.runtime.Immutable
 import app.tgplayer.TdException
 import app.tgplayer.Telegram
 import kotlinx.coroutines.async
@@ -10,6 +11,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 enum class ChatKind(val label: String) { CHANNEL("Channel"), GROUP("Group"), PERSON("Person") }
 
+// @Immutable: all fields are val and composition never reads the mutable internals of the TdApi.File
+// (download progress is shown via MediaActions, not by inspecting photo/file here) — so Compose can
+// skip cards that receive an unchanged item. Overrides the unstable inference from TdApi.File/ByteArray.
+@Immutable
 data class ChatItem(
     val id: Long,
     val title: String,
@@ -38,6 +43,7 @@ enum class MediaFilter(val label: String) {
     }
 }
 
+@Immutable // see ChatItem: stable for composition; mutable file state is observed via MediaActions, not here.
 data class MediaItem(
     val chatId: Long,
     val messageId: Long,

@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -35,16 +36,21 @@ fun TdImage(
     modifier: Modifier = Modifier,
     placeholder: @Composable () -> Unit = {},
 ) {
-    val miniBitmap = remember(mini) { mini?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+    // Decode the inline thumb off the main thread (OPT-1): it's tiny, but doing it in composition
+    // janked scrolling across a gridful of tiles. One frame of placeholder first is fine.
+    val miniBitmap by produceState<ImageBitmap?>(null, mini) {
+        value = mini?.let { withContext(Dispatchers.IO) { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+    }
     var full by remember(file?.id) { mutableStateOf(file?.id?.let { cache.get(it) }) }
     LaunchedEffect(file?.id) {
         if (full == null && file != null) full = load(file)
     }
     Box(modifier) {
         val shown = full
+        val mini = miniBitmap // local val: a delegated property can't be smart-cast
         when {
             shown != null -> Image(shown, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            miniBitmap != null -> Image(miniBitmap, null, Modifier.fillMaxSize().blur(12.dp), contentScale = ContentScale.Crop)
+            mini != null -> Image(mini, null, Modifier.fillMaxSize().blur(12.dp), contentScale = ContentScale.Crop)
             else -> placeholder()
         }
     }
