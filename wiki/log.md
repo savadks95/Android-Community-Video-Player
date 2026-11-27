@@ -58,6 +58,16 @@ Fixed the 5 must-fixes (+ the clear() race) — build + unit tests green:
   (`File.writeTextAtomically`), matching Tmdb.get. MediaLibrary.kt.
 - OOM: TdImage/NetThumb/LocalThumb caches byte-sized (maxMemory/8 + sizeOf) like WebImage.
 
-Still open (see audit, not yet done): #6 load()/scan() catalog clobber, #8 DropIt progress atomicity,
-#9 DropIt /ask guard, #10 image-loader consolidation, #11 player-pulse helper, #13 sha1 util, and the
-nice-to-haves. #12 queue-key fix needs a composite key (duplicate mediaId would re-crash like #1).
+## [2026-11-27] audit | Should-fixes landed
+Build + unit tests green.
+- #6 catalog clobber: `load()`'s standalone offline build re-checks `_catalog` after building and only
+  publishes if still null, so a concurrent `scan()` catalog isn't overwritten with stale. MediaLibrary.kt.
+- #8 DropIt progress: `_receiving` updated via `MutableStateFlow.update {}` (atomic) at all three sites.
+- #9 DropIt `/ask`: untrusted body parsed with runCatching → 400, `files` capped at 1000 and parsed
+  with opt* (no per-field throw). DropIt.kt.
+- miss-set leak (part of #10): `noThumb`/`noNetThumb` are now bounded `LruCache(512)`, not growing HashSets.
+
+Deferred (pure consolidation, change Compose update timing — want on-device verification): #10 shared
+`ThumbBox` extraction across the four image loaders, #11 `rememberPlayerPulse` helper. Also open: nice-to-
+haves (#13 sha1 util, #14 http error typing, #15 bare close, #16 LIMIT bind, #17 Settings JSON, #18 wiki
+security page) and #12 queue-key (needs a composite key or duplicate mediaId re-crashes like #1).

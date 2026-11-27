@@ -38,7 +38,7 @@ import java.security.MessageDigest
 private val netCache = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
     override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
 }
-private val noNetThumb = HashSet<String>()
+private val noNetThumb = LruCache<String, Boolean>(512) // bounded, was an unbounded HashSet
 /** A folder of 50 videos shouldn't open 50 connections at once. */
 private val netSlots = Semaphore(2)
 
@@ -48,9 +48,9 @@ fun NetThumb(uri: String, modifier: Modifier = Modifier, placeholder: @Composabl
     val context = LocalContext.current
     var bitmap by remember(uri) { mutableStateOf(netCache.get(uri)) }
     LaunchedEffect(uri) {
-        if (bitmap == null && uri !in noNetThumb) {
+        if (bitmap == null && noNetThumb.get(uri) == null) {
             bitmap = netSlots.withPermit { withContext(Dispatchers.IO) { runCatching { load(context, uri) }.getOrNull() } }
-            bitmap?.let { netCache.put(uri, it) } ?: noNetThumb.add(uri)
+            bitmap?.let { netCache.put(uri, it) } ?: noNetThumb.put(uri, true)
         }
     }
     Box(modifier) {

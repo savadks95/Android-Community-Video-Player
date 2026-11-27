@@ -30,16 +30,16 @@ import java.io.File
 private val localCache = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
     override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
 }
-private val noThumb = HashSet<String>() // files we already know have no picture
+private val noThumb = LruCache<String, Boolean>(512) // files we already know have no picture (bounded, was an unbounded HashSet)
 
 /** Video frame or embedded album art for a file on the phone; [placeholder] until/unless one exists. */
 @Composable
 fun LocalThumb(path: String, kind: MediaKind, modifier: Modifier = Modifier, placeholder: @Composable () -> Unit = {}) {
     var bitmap by remember(path) { mutableStateOf(localCache.get(path)) }
     LaunchedEffect(path) {
-        if (bitmap == null && path !in noThumb) {
+        if (bitmap == null && noThumb.get(path) == null) {
             bitmap = withContext(Dispatchers.IO) { runCatching { load(path, kind) }.getOrNull() }
-            bitmap?.let { localCache.put(path, it) } ?: noThumb.add(path)
+            bitmap?.let { localCache.put(path, it) } ?: noThumb.put(path, true)
         }
     }
     Box(modifier) {

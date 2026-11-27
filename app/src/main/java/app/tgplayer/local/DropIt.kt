@@ -14,6 +14,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -324,11 +325,17 @@ class DropItSession(context: Context) {
 
     private fun ask(input: DataInputStream, length: Long, out: OutputStream) {
         if (length > 256 * 1024) return reply(out, "413 Payload Too Large")
-        val json = JSONObject(ByteArray(length.toInt()).also(input::readFully).toString(Charsets.UTF_8))
-        val list = json.getJSONArray("files")
-        val files = (0 until list.length()).map { i ->
-            val f = list.getJSONObject(i)
-            DropFile(Uri.EMPTY, DropIt.safeName(f.getString("name")), f.getLong("size").coerceAtLeast(0))
+        val bytes = ByteArray(length.toInt()).also(input::readFully)
+        // A LAN peer's body is untrusted: a malformed one must answer 400, not throw out of serve() (which
+        // drops the connection with no status), and a well-formed body must not be allowed to allocate an
+        // unbounded file list. Parse defensively and cap the count.
+        val json = runCatching { JSONObject(bytes.toString(Charsets.UTF_8)) }.getOrNull() ?: return reply(out, "400 Bad Request")
+        val list = json.optJSONArray("files") ?: return reply(out, "400 Bad Request")
+        if (list.length() == 0 || list.length() > 1000) return reply(out, "400 Bad Request")
+        val files = (0 until list.length()).mapNotNull { i ->
+            val f = list.optJSONObject(i) ?: return@mapNotNull null
+            val name = f.optString("name").ifBlank { return@mapNotNull null }
+            DropFile(Uri.EMPTY, DropIt.safeName(name), f.optLong("size").coerceAtLeast(0))
         }
         if (files.isEmpty()) return reply(out, "400 Bad Request")
         val offer = DropOffer(json.optString("from").take(60).ifBlank { "A nearby phone" }, files)
@@ -351,10 +358,12 @@ class DropItSession(context: Context) {
         if (!synchronized(b) { b.received.add(i) }) return reply(out, "409 Conflict") // each accepted file once
         try {
             save(file.name, input, length)
-            _receiving.value = _receiving.value?.let { it.copy(saved = it.saved + 1) }
+            // Atomic: concurrent /file uploads (different i) run on separate pool threads; a plain get-set
+            // could drop an increment and leave `saved` short of count, stuck on "Receiving" forever.
+            _receiving.update { it?.copy(saved = it.saved + 1) }
             reply(out, "200 OK")
         } catch (e: IOException) {
-            _receiving.value = _receiving.value?.copy(failed = true)
+            _receiving.update { it?.copy(failed = true) }
             batch = null
             throw e
         }
@@ -362,7 +371,7 @@ class DropItSession(context: Context) {
 
     /** Writes [length] bytes from [input] to Download/Drop It, removing the partial file if the transfer breaks. */
     private fun save(name: String, input: InputStream, length: Long) {
-        val onBytes = { n: Int -> _receiving.value = _receiving.value?.let { it.copy(doneBytes = it.doneBytes + n) } }
+        val onBytes = { n: Int -> _receiving.update { it?.copy(doneBytes = it.doneBytes + n) } }
         if (Build.VERSION.SDK_INT >= 29) {
             val resolver = app.contentResolver
             val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase()) ?: "application/octet-stream"

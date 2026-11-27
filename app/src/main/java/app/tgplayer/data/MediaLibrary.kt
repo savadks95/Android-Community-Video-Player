@@ -122,7 +122,12 @@ object MediaLibrary {
     fun load() {
         if (_scanning.value) return
         if (!filesList.exists()) return scan()
-        if (_catalog.value == null) scope.launch { if (_catalog.value == null) _catalog.value = build(readFiles(), offline = true) }
+        if (_catalog.value == null) scope.launch {
+            val cached = build(readFiles(), offline = true)
+            // Re-check: if the scan below already published a (fresher) catalog while we built, don't clobber
+            // it with this stale offline one — both run unordered on `scope`.
+            if (_catalog.value == null) _catalog.value = cached
+        }
         if (System.currentTimeMillis() - filesList.lastModified() > 60 * 60 * 1000L) scan()
     }
 
