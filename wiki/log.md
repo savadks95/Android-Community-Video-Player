@@ -71,6 +71,14 @@ Open: nice-to-haves (#13 sha1 util, #14 http error typing, #15 bare close, #16 L
 JSON, #18 wiki security page) and #12 queue-key (needs a composite key or duplicate mediaId re-crashes
 like #1).
 
+## [2026-11-27] doc | F-Droid readiness page added
+Added [[fdroid-readiness]] after verifying against F-Droid's Inclusion Policy and the Jellyfin
+precedent (web search). Two hard blockers: (B1) prebuilt native `.so` blobs checked into the repo
+(libtdjni/libdav1dJNI/libffmpegJNI) — F-Droid builds from source, so each needs a source-build
+recipe; (B2) `media3-cast` pulls Google's proprietary Cast SDK — must be removed/flavored, as
+Jellyfin did. Plus B3: the build-injected Telegram API keys. No code changed; checklist recorded for
+later. Listed under Distribution in [[index]].
+
 ## [2026-11-27] refactor | Consolidation refactors (#10, #11) landed
 Build + unit tests green; behaviour preserved (wants on-device confirmation of scroll/player redraw).
 - #10 shared `ThumbBox` (ui/ThumbBox.kt): the state-seed + LaunchedEffect + Box/Image/placeholder

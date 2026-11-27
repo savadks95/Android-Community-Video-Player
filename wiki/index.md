@@ -26,6 +26,11 @@ reads them. See `AGENTS.md` for the rules, `log.md` for history.
 - [[synthesis/optimization-targets]] — ranked, evidence-cited performance/size
   hotspots across all layers (drives the CodeOptimization work).
 
+## Distribution
+
+- [[fdroid-readiness]] — why the app isn't F-Droid-ready (prebuilt native blobs +
+  the proprietary Google Cast dependency) and the two workstreams to fix it.
+
 ## Related (project memory)
 
 LAN mDNS multicast is dropped by the router → DropIt uses UDP unicast.
