@@ -15,6 +15,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.MalformedURLException
 import java.net.UnknownServiceException
 import java.net.URL
@@ -212,7 +213,9 @@ class HttpDownload(val uri: Uri, val file: File) {
 
     /** GET from [offset]; follows redirects (also http→https). Skips ahead if the server ignores Range. */
     private fun open(offset: Long): Pair<InputStream, AutoCloseable> {
-        var url = URL(uri.toString())
+        val originUrl = URL(uri.toString())
+        val restrictToPublic = !resolvesPrivate(originUrl) // a user-chosen LAN source may redirect within the LAN
+        var url = originUrl
         repeat(6) {
             val c = (url.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
@@ -227,7 +230,13 @@ class HttpDownload(val uri: Uri, val file: File) {
                 in 300..399 -> {
                     val location = c.getHeaderField("Location") ?: throw IOException("Redirect without a location")
                     c.disconnect()
-                    url = URL(url, location)
+                    val next = URL(url, location)
+                    val scheme = next.protocol?.lowercase()
+                    if (scheme != "http" && scheme != "https")
+                        throw UnknownServiceException("Redirect to non-http scheme refused: $scheme")
+                    if (restrictToPublic && resolvesPrivate(next)) // SSRF: public host can't redirect into a private/LAN address
+                        throw UnknownServiceException("Redirect to private address refused: ${next.host}")
+                    url = next
                     return@repeat
                 }
                 206 -> {
@@ -260,6 +269,20 @@ class HttpDownload(val uri: Uri, val file: File) {
     }
 
     class HttpStatusException(val code: Int) : IOException("HTTP $code")
+
+    /**
+     * True if [url]'s host resolves to any loopback / LAN / link-local / multicast address. Reject-if-any
+     * so a dual-record host can't slip a private address past the check.
+     * tails: ceiling — a narrow DNS-rebind window remains between this resolve and the socket connect;
+     * upgrade path is to pin the connection to the validated IP, awkward with HttpURLConnection (P2, not done).
+     */
+    private fun resolvesPrivate(url: URL): Boolean {
+        val addrs = try { InetAddress.getAllByName(url.host) } catch (_: Exception) { return false }
+        return addrs.any {
+            it.isLoopbackAddress || it.isAnyLocalAddress || it.isLinkLocalAddress ||
+                it.isSiteLocalAddress || it.isMulticastAddress
+        }
+    }
 
     /** Refused by policy, bad address, or a 4xx answer: the same request will fail again. */
     private fun isPermanent(e: IOException) =
