@@ -15,6 +15,9 @@ local.properties
 google-services.json
 keystore.properties
 signing.properties
+# LLM_Tails: local AI-coding plugin config, not part of the app
+.claude/
+AGENTS.md
 # Vercel and Supabase: project links, CLI state, local env and the Deals admin app
 .vercel/
 vercel.json
