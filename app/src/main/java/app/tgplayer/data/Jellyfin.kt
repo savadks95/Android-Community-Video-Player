@@ -75,19 +75,36 @@ object Jellyfin {
             }.orEmpty()
         }
 
-    /** Signs in and keeps the server; [address] may lack http:// and the port is kept as typed. */
+    /** Signs in and keeps the server; [address] may lack a scheme and the port is kept as typed. */
     suspend fun signIn(address: String, user: String, password: String): JellyfinServer = withContext(Dispatchers.IO) {
-        val url = address.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
+        val trimmed = address.trim().trimEnd('/')
+        val hasScheme = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        // No scheme given: try https first so a routable server never sees the password (and the long-lived
+        // token) in cleartext, and fall back to http only when https can't connect — LAN servers, self-signed
+        // certs. A reachable https server that rejects us (e.g. 401) is NOT retried in cleartext. Typed scheme kept.
+        val candidates = if (hasScheme) listOf(trimmed) else listOf("https://$trimmed", "http://$trimmed")
         val body = JSONObject().put("Username", user).put("Pw", password).toString()
-        val auth = JSONObject(request(url, "/Users/AuthenticateByName", null, "POST", body))
-        val name = runCatching { JSONObject(request(url, "/System/Info/Public", null)).optString("ServerName") }.getOrNull()
-        JellyfinServer(
-            url,
-            name?.ifEmpty { null } ?: url.substringAfter("://"),
-            auth.getJSONObject("User").getString("Id"),
-            auth.getJSONObject("User").optString("Name", user),
-            auth.getString("AccessToken"),
-        ).also { server = it }
+        var lastError: Exception? = null
+        for ((i, url) in candidates.withIndex()) {
+            try {
+                val auth = JSONObject(request(url, "/Users/AuthenticateByName", null, "POST", body))
+                val name = runCatching { JSONObject(request(url, "/System/Info/Public", null)).optString("ServerName") }.getOrNull()
+                return@withContext JellyfinServer(
+                    url,
+                    name?.ifEmpty { null } ?: url.substringAfter("://"),
+                    auth.getJSONObject("User").getString("Id"),
+                    auth.getJSONObject("User").optString("Name", user),
+                    auth.getString("AccessToken"),
+                ).also { server = it }
+            } catch (e: Exception) {
+                lastError = e
+                // Downgrade to http only when https couldn't connect, never when the server answered.
+                val connectFailed = e is java.net.ConnectException || e is java.net.SocketTimeoutException ||
+                    e is java.net.UnknownHostException || e is java.net.NoRouteToHostException || e is javax.net.ssl.SSLException
+                if (!(i < candidates.lastIndex && connectFailed)) throw e
+            }
+        }
+        throw lastError ?: java.io.IOException("Couldn't reach $address")
     }
 
     /** Forgets the server here and ends this device's session on it. */

@@ -173,8 +173,8 @@ object MediaLibrary {
                 }
                 _unreachable.value = unreachable
                 if (fullTelegram && unreachable.isEmpty()) telegram.put(FULL_SCAN_AT, now)
-                telegramFile.writeText(telegram.toString())
-                filesList.writeText(files.entries.joinToString("\n") { (uri, f) -> "$uri\t${f.added}\t${f.name.orEmpty().replace('\t', ' ')}" })
+                telegramFile.writeTextAtomically(telegram.toString())
+                filesList.writeTextAtomically(files.entries.joinToString("\n") { (uri, f) -> "$uri\t${f.added}\t${f.name.orEmpty().replace('\t', ' ')}" })
                 _catalog.value = build(files, offline = true) // names and anything already matched, at once
                 if (Tmdb.available) _catalog.value = build(files, offline = false)
             } finally {
@@ -214,13 +214,24 @@ object MediaLibrary {
         scope.launch {
             val matches = readMatches()
             matches.put(key, meta.tmdbId)
-            matchesFile.writeText(matches.toString())
+            matchesFile.writeTextAtomically(matches.toString())
             _catalog.value = build(readFiles(), offline = false)
         }
     }
 
     private fun readMatches(): JSONObject =
         runCatching { JSONObject(matchesFile.readText()) }.getOrDefault(JSONObject())
+
+    /**
+     * Write + atomic rename. Plain writeText truncates first, so a concurrent reader (setMatch racing a
+     * scan, both on [scope]) could read a half-written file — runCatching then swallows it to empty and the
+     * hand-picked matches vanish. Rename is atomic on the same filesystem, and a crash can't truncate.
+     */
+    private fun File.writeTextAtomically(text: String) {
+        val tmp = File.createTempFile(name, ".tmp", parentFile)
+        tmp.writeText(text)
+        if (!tmp.renameTo(this)) { tmp.delete(); throw IOException("Couldn't write $name") }
+    }
 
     /** URI → what the last scan knew. Lines are "uri<TAB>ms<TAB>name" (older lists had fewer columns). */
     private fun readFiles(): Map<String, Found> =

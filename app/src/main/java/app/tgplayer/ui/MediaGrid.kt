@@ -102,7 +102,9 @@ class Pager<C : Any>(private val fetch: suspend (C?) -> Page<C>) {
         if (loading) return
         try {
             val page = fetch(null)
-            items = page.items
+            // Dedup like loadMore(): downloads() is file-based but the grid key is message-based, so a
+            // message with two files would otherwise give duplicate keys and crash the LazyGrid.
+            items = page.items.distinctBy { it.key }
             cursor = page.next
             finished = page.next == null
         } catch (e: CancellationException) {

@@ -68,6 +68,14 @@ object StreamCache {
         current = null
     }
 
+    @Synchronized
+    fun clear(context: Context) {
+        cancel()
+        downloads.values.forEach { it.stop(); it.close() }
+        downloads.clear()
+        dir(context).listFiles().orEmpty().forEach { it.delete() }
+    }
+
     fun usedBytes(context: Context): Long =
         dir(context).listFiles().orEmpty().filter { it.extension == "data" }.sumOf(::bytesOnDisk)
 
@@ -82,13 +90,6 @@ object StreamCache {
         }.getOrDefault(data.length())
     }
 
-    fun clear(context: Context) {
-        cancel()
-        downloads.values.forEach { it.stop() }
-        downloads.clear()
-        dir(context).listFiles().orEmpty().forEach { it.delete() }
-    }
-
     /** Oldest files go first once the folder is over the user's limit; the current file is kept. */
     private fun trim(context: Context) {
         val limit = Settings.cacheLimitGb * Storage.GB
@@ -99,8 +100,9 @@ object StreamCache {
             if (total <= limit) break
             if (f == keep) continue
             total -= bytesOnDisk(f)
-            downloads.entries.removeIf { (_, d) -> (d.file == f).also { if (it) d.stop() } }
-            f.delete()
+            downloads.entries.removeIf { (_, d) -> (d.file == f).also { if (it) { d.stop(); d.close() } } }
+            f.delete() // handle closed above, so this doesn't orphan an open "rw" fd on the inode
+
             File(f.path.removeSuffix(".data") + ".ranges").delete()
         }
     }
@@ -154,6 +156,12 @@ class HttpDownload(val uri: Uri, val file: File) {
         generation++
         saveRanges()
     }
+
+    /**
+     * Release the write handle. Call only when this download leaves the cache for good (eviction/clear),
+     * NOT on [stop] — the same instance resumes via getOrPut on re-aim or a switch back.
+     */
+    fun close() = runCatching { writer.close() }
 
     private fun run(gen: Int, startAt: Long) {
         var offset = startAt

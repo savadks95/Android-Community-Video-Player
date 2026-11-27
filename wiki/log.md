@@ -40,3 +40,24 @@ Implemented on branch `CodeOptimization` (off Development); `./gradlew :app:test
   mini-thumb decode moved off the main thread. Per-item download-progress scoping deferred.
 - OPT-10: gradle.properties parallel/caching/configuration-cache.
 Deferred: OPT-6, OPT-7, OPT-8 (R8). OPT-9 not feasible (see [[synthesis/optimization-targets]]).
+
+## [2026-11-27] audit | Full Ponytail audit + must-fixes landed
+Ran a whole-repo four-pillar audit (three parallel passes). Repo healthy; 18 findings. Verified
+sound (kept as-is): Secrets canary, TelegramLock (constant-time, 150k PBKDF2), SFTP TOFU, CastServer
+(token-gated, LAN-only, no traversal), all deps used (media3-hls/dash load reflectively). The OPT
+changes were re-verified clean.
+
+Fixed the 5 must-fixes (+ the clear() race) — build + unit tests green:
+- Downloads crash: `Pager.refresh()` now `distinctBy { it.key }` (file-based downloads vs message-based
+  key gave duplicate LazyGrid keys). MediaGrid.kt.
+- fd leak: `HttpDownload.close()` added, called from `StreamCache.trim()`/`clear()` before deleting the
+  file; `clear()` is now `@Synchronized`. StreamCache.kt.
+- Jellyfin cleartext: `signIn` tries https first, falls back to http only on a connection failure (never
+  on a 401). Jellyfin.kt.
+- Data loss: `matches.json`/`files.txt`/`telegram.json` now written via temp+rename
+  (`File.writeTextAtomically`), matching Tmdb.get. MediaLibrary.kt.
+- OOM: TdImage/NetThumb/LocalThumb caches byte-sized (maxMemory/8 + sizeOf) like WebImage.
+
+Still open (see audit, not yet done): #6 load()/scan() catalog clobber, #8 DropIt progress atomicity,
+#9 DropIt /ask guard, #10 image-loader consolidation, #11 player-pulse helper, #13 sha1 util, and the
+nice-to-haves. #12 queue-key fix needs a composite key (duplicate mediaId would re-crash like #1).

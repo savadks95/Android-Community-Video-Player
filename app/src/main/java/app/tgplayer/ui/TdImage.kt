@@ -23,7 +23,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
 
-private val cache = LruCache<Int, ImageBitmap>(120)
+// Capped by bytes, not entry count (like WebImage): count-capping full ~480px bitmaps OOMs a low-heap device.
+private val cache = object : LruCache<Int, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: Int, value: ImageBitmap) = value.width * value.height * 4
+}
 
 /**
  * A Telegram image: shows the tiny inline [mini] thumbnail (blurred) at once, then the real [file]

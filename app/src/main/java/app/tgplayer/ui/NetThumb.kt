@@ -34,7 +34,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 
-private val netCache = LruCache<String, ImageBitmap>(120)
+// Capped by bytes, not entry count (like WebImage): count-capping full bitmaps OOMs a low-heap device.
+private val netCache = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
+}
 private val noNetThumb = HashSet<String>()
 /** A folder of 50 videos shouldn't open 50 connections at once. */
 private val netSlots = Semaphore(2)

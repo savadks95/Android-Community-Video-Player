@@ -26,7 +26,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val localCache = LruCache<String, ImageBitmap>(200)
+// Capped by bytes, not entry count (like WebImage): count-capping full 480x270 bitmaps OOMs a low-heap device.
+private val localCache = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
+}
 private val noThumb = HashSet<String>() // files we already know have no picture
 
 /** Video frame or embedded album art for a file on the phone; [placeholder] until/unless one exists. */
